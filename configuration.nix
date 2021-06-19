@@ -13,18 +13,37 @@
 
   nix.buildCores = 0;
   security.wrappers.slock.source = "${pkgs.slock.out}/bin/slock";
-
   programs.adb.enable = true;
-
-  nixpkgs.config.allowUnfree = true;
-  nixpkgs.config.allowUnfreePredicate = (pkg: true);
-  nixpkgs.config.allowBroken = true;
-  nixpkgs.config.permittedInsecurePackages = ["openssl-1.0.2u" ]; #"adobe-reader-9.5.5-1"];
-
+  services.fwupd.enable = true;
+  nix.binaryCaches = [ "https://nixcache.reflex-frp.org" ];
+  nix.binaryCachePublicKeys = [ "ryantrinkle.com-1:JJiAKaRv9mWgpVAz8dwewnZe0AzzEAzPkagE9SP5NWI=" ];
+  nix.trustedUsers = [ "root" "cyberdront" ];
+  nixpkgs =
+    let
+      withUnstable =
+        let
+          unstableTar = builtins.fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz;
+          masterTar = builtins.fetchTarball https://github.com/NixOS/nixpkgs/archive/master.tar.gz;
+        in
+        self: super: {
+          unstable = import unstableTar { config = config.nixpkgs.config; };
+          master = import masterTar { config = config.nixpkgs.config; };
+        };
+    in
+    {
+      overlays = [ withUnstable ];
+      config = {
+        allowUnfree = true;
+        allowUnfreePredicate = (pkg: true);
+        allowBroken = true;
+        permittedInsecurePackages = ["openssl-1.0.2u" "adobe-reader-9.5.5-1"];
+      };
+    };
   networking.hostName = "BStation"; # Define your hostname.
   networking.networkmanager.enable = true;
   networking.useDHCP = false;
   networking.interfaces.enp7s0.useDHCP = true;
+  networking.timeServers = [ "ntp1.vniiftri.ru" ];
 
   services.teamviewer.enable = false;
 
@@ -45,81 +64,54 @@
   ];
 
   environment.systemPackages = with pkgs; [
-    #default
     wget mc htop
-
-    #util
     testdisk-qt slock
-
-    #application
     baobab dia libreoffice slack gnucash fbreader calibre blender gimp firefox
-    tdesktop vlc pgadmin remmina google-chrome chromium translate-shell
+    tdesktop vlc remmina google-chrome translate-shell
     transmission-gtk vivaldi-widevine discord freecad
     screen avidemux ffmpeg-full lame
-    cudatoolkit
-
-    #wine
-    steam winetricks protontricks steam-run steamcmd #linux-steam-integration
-    steam-run playonlinux
-    sc-controller #steamcontroller 
-    
-    # support both 32- and 64-bit applications
-    #wineWowPackages.stable
-    # support 32-bit only
-    wine
-    # support 64-bit only
-    # (wine.override { wineBuild = "wine64"; })
-    # wine-staging (version with experimental features)
-    # wineWowPackages.staging
-
-    #games
-    #minecraft minecraft-server multimc
-
-    #sound maker
+    imagemagick
+    zeroad
+    steam protontricks 
+    steamPackages.steam steamPackages.steamcmd steamPackages.steam-fonts steamPackages.steam-runtime
+    sc-controller 
+    logitech-udev-rules    
+    wineWowPackages.full winetricks playonlinux
+    openttd
     audacity ardour FIL-plugins lmms mixxx
-
-    #develop
-    atom #android-studio vscodium
-    jetbrains.pycharm-community
-    #ghcid
-
-    #language
-    clisp sbcl gcc cmake clang llvm autobuild autoconf automake binutils
-    mono gitAndTools.gitFull coreutils-full
-
-    #haskell
+    atom vscodium
+    sunxi-tools
+    clisp sbcl gcc cmake llvm autobuild autoconf automake binutils
+    git nix-prefetch-github git-lfs
+    coreutils-full patchelf
     ghc ghcid stack cabal-install
+    haskellPackages.haskell-language-server
 
-    #tools
     mtpfs jmtpfs pavucontrol microcodeIntel ntfs3g btrfs-progs zfs zfstools firmwareLinuxNonfree
     gparted psmisc bcache-tools debianutils p7zip unzip unrar gzip zstd
     drive
 
-    msbuild #monodevelop unity3d aqbanking
-    xits-math skypeforlinux
-    #yandex-disk
+    mono #msbuild #monodevelop
+    unity3d
+    dotnet-netcore
 
-    #fonts
-    #hack-font
+    xits-math skypeforlinux
 
     #python
     python38
     python38Packages.virtualenv
-    python38Packages.pip python38Packages.pip-tools #python37Packages.pip2nix
-    python38Packages.pipdate
-    python38Packages.pyudev python38Packages.evdev
-    python38Packages.ds4drv
+    python38Packages.pip python38Packages.pip-tools python38Packages.pipdate
 
-    #library
-    #musl libunwind lit lld wllvm
     x264 openh264 #gstreamer
 
-    #mesa wayland wayland-protocols pkg-configUpstream pkg-config meson
   ];
 
   # Enable the OpenSSH daemon.
   services.openssh.enable = true;
+  programs.ssh.startAgent = true;
 
+  #Steam
+  programs.steam.enable = true;
   hardware.steam-hardware.enable = true;
 
   # Bluetooth
@@ -139,34 +131,44 @@
   services.xserver.xkbOptions = "grp:ctrl_shift_toggle";
   services.xserver.videoDrivers = [ "nvidia" ];
 
+  programs.java.enable = true;
+
   hardware.opengl = {
     enable = true;
     driSupport32Bit = true;
+    extraPackages= with pkgs; [ vaapiVdpau libvdpau-va-gl ];
     extraPackages32 = with pkgs.pkgsi686Linux; [ libva ];
   };
 
+
   services.xserver.desktopManager.xfce.enable = true;
+  services.xserver.windowManager.xmonad.enable = true;
   services.xserver.displayManager.defaultSession = "xfce";
-  #services.xserver.desktopManager.xfce.thunarPlugins = [];
   services.picom = {
     enable          = true;
     fade            = true;
     inactiveOpacity = 0.9;
-    shadow          = true;
+    shadow          = false;
     fadeDelta       = 4;
   };
 
-  system.stateVersion = "20.09";
-  system.autoUpgrade.enable = true;
+  users.users.cyberdront = {
+    isNormalUser = true;
+    uid = 1000;
+    home = "/home/cyberdront";
+    createHome = true;
+    extraGroups = [ "wheel" "disk" "audio" "dialout" "users" "adm" "networkmanager" "adbusers" "nixbld" "input" "docker" ];
+    description = "Marat Yanchurin";
+  };
 
   services.postgresql = {
     enable = true;
-    package = pkgs.postgresql_11;
+    package = pkgs.postgresql_12;
     enableTCPIP = true;
     dataDir = "/datastor/PostgresqlDB";
-    authentication = pkgs.lib.mkOverride 11 ''
+    authentication = pkgs.lib.mkOverride 12 ''
       local all all trust
-      host all all 192.168.95.1/24 trust
+      host all all 192.168.95.0/24 trust
       host all all ::1/128 trust
     '';
   };
@@ -181,5 +183,6 @@
     dates = [ "20:00" ];
   };
 
+  system.stateVersion = "20.09";
 
 }
